@@ -123,12 +123,8 @@
     let currentTheme = 0;
     
     function connect() {
-      // For cloud deployment, use current page's host
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.host;
-      const wsUrl = `${protocol}//${host}`;
-      
-      console.log('Connecting to:', wsUrl);
+      const wsUrl = `${protocol}//${window.location.host}`;
       
       ws = new WebSocket(wsUrl);
       
@@ -146,18 +142,23 @@
           const text = data.text || '';
           const cursorPos = data.cursorPosition !== undefined ? data.cursorPosition : text.length;
           
+          // Clear display
           textDisplay.innerHTML = '';
           
+          // Split text at cursor position
           const beforeCursor = text.slice(0, cursorPos);
           const afterCursor = text.slice(cursorPos);
           
+          // Create text nodes
           const beforeNode = document.createTextNode(beforeCursor);
           const afterNode = document.createTextNode(afterCursor);
           
+          // Build display: text before + cursor + text after
           textDisplay.appendChild(beforeNode);
           textDisplay.appendChild(cursor);
           textDisplay.appendChild(afterNode);
           
+          // Scroll cursor into view
           setTimeout(() => {
             cursor.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
           }, 10);
@@ -172,6 +173,7 @@
         statusDiv.className = 'disconnected';
         statusText.textContent = '○ Disconnected - Reconnecting...';
         
+        // Try to reconnect every 2 seconds
         reconnectInterval = setInterval(() => {
           connect();
         }, 2000);
@@ -202,8 +204,10 @@
       }, 1000);
     }
     
+    // Initial connection
     connect();
     
+    // Prevent iPad from sleeping
     let wakeLock = null;
     if ('wakeLock' in navigator) {
       navigator.wakeLock.request('screen').then(lock => {

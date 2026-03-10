@@ -9,8 +9,8 @@ local TOGGLE_KEY = "escape"
 local capturing = false
 local eventtap = nil
 
-local function sendKeystroke(key, char)
-  local json = hs.json.encode({key = key, char = char})
+local function sendKeystroke(key, char, shift)
+  local json = hs.json.encode({key = key, char = char, shift = shift})
   
   hs.http.asyncPost(SERVER_URL, json, {
     ["Content-Type"] = "application/json"
@@ -52,28 +52,31 @@ eventtap = hs.eventtap.new({hs.eventtap.event.types.keyDown}, function(event)
   
   local keyName = hs.keycodes.map[keyCode]
   
+  -- Check if shift key is pressed
+  local shiftPressed = flags.shift or false
+  
   if keyName == "escape" then
     return false
   end
   
   if keyName == "delete" or keyName == "forwarddelete" then
-    sendKeystroke("delete", nil)
+    sendKeystroke("delete", nil, shiftPressed)
   elseif keyName == "return" then
-    sendKeystroke("return", nil)
+    sendKeystroke("return", nil, shiftPressed)
   elseif keyName == "tab" then
-    sendKeystroke("tab", nil)
+    sendKeystroke("tab", nil, shiftPressed)
   elseif keyName == "space" then
-    sendKeystroke("space", nil)
+    sendKeystroke("space", nil, shiftPressed)
   elseif keyName == "up" then
-    sendKeystroke("up", "↑")
+    sendKeystroke("up", "↑", shiftPressed)
   elseif keyName == "down" then
-    sendKeystroke("down", "↓")
+    sendKeystroke("down", "↓", shiftPressed)
   elseif keyName == "left" then
-    sendKeystroke("left", "←")
+    sendKeystroke("left", "←", shiftPressed)
   elseif keyName == "right" then
-    sendKeystroke("right", "→")
+    sendKeystroke("right", "→", shiftPressed)
   elseif chars and #chars > 0 then
-    sendKeystroke(keyName, chars)
+    sendKeystroke(keyName, chars, shiftPressed)
   end
   
   return false
