@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Keystroke Mirror</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #000;
+      color: #0f0;
+      overflow: hidden;
+      height: 100vh;
+    }
+    
+    #container {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    #status {
+      padding: 10px 20px;
+      background: rgba(255, 255, 255, 0.1);
+      font-size: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    #status.connected {
+      background: rgba(0, 255, 0, 0.2);
+    }
+    
+    #status.disconnected {
+      background: rgba(255, 0, 0, 0.2);
+    }
+    
+    #text-display {
+      flex: 1;
+      padding: 30px;
+      padding-left: calc(3in + 30px);
+      font-size: 18px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      overflow-y: auto;
+      font-family: 'Monaco', 'Courier New', monospace;
+      max-width: 800px;
+      margin: 0 auto;
+      width: 100%;
+      border-left: 1px solid rgba(0, 255, 0, 0.3);
+      border-right: 1px solid rgba(0, 255, 0, 0.3);
+    }
+    
+    #cursor {
+      display: inline-block;
+      width: 3px;
+      height: 1.2em;
+      background: #0f0;
+      animation: blink 1s infinite;
+      vertical-align: text-bottom;
+    }
+    
+    @keyframes blink {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0; }
+    }
+    
+    .controls {
+      display: flex;
+      gap: 10px;
+    }
+    
+    button {
+      padding: 5px 15px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid #0f0;
+      color: #0f0;
+      cursor: pointer;
+      font-size: 12px;
+      border-radius: 4px;
+    }
+    
+    button:active {
+      background: rgba(0, 255, 0, 0.2);
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="status" class="disconnected">
+      <span id="status-text">Connecting...</span>
+      <div class="controls">
+        <button onclick="clearText()">Clear</button>
+        <button onclick="toggleTheme()">Toggle Theme</button>
+      </div>
+    </div>
+    <div id="text-display"><span id="cursor"></span></div>
+  </div>
+
+  <script>
+    const textDisplay = document.getElementById('text-display');
+    const statusDiv = document.getElementById('status');
+    const statusText = document.getElementById('status-text');
+    const cursor = document.getElementById('cursor');
+    
+    let ws;
+    let reconnectInterval;
+    
+    const themes = [
+      { bg: '#000', fg: '#0f0', name: 'Matrix' },
+      { bg: '#1e1e1e', fg: '#d4d4d4', name: 'Dark' },
+      { bg: '#fff', fg: '#000', name: 'Light' },
+      { bg: '#002b36', fg: '#839496', name: 'Solarized' }
+    ];
+    let currentTheme = 0;
+    
+    function connect() {
+      // For cloud deployment, use current page's host
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host;
+      const wsUrl = `${protocol}//${host}`;
+      
+      console.log('Connecting to:', wsUrl);
+      
+      ws = new WebSocket(wsUrl);
+      
+      ws.onopen = () => {
+        console.log('Connected to server');
+        statusDiv.className = 'connected';
+        statusText.textContent = '● Connected';
+        clearInterval(reconnectInterval);
+      };
+      
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'init' || data.type === 'update') {
+          const text = data.text || '';
+          const cursorPos = data.cursorPosition !== undefined ? data.cursorPosition : text.length;
+          
+          textDisplay.innerHTML = '';
+          
+          const beforeCursor = text.slice(0, cursorPos);
+          const afterCursor = text.slice(cursorPos);
+          
+          const beforeNode = document.createTextNode(beforeCursor);
+          const afterNode = document.createTextNode(afterCursor);
+          
+          textDisplay.appendChild(beforeNode);
+          textDisplay.appendChild(cursor);
+          textDisplay.appendChild(afterNode);
+          
+          setTimeout(() => {
+            cursor.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+          }, 10);
+        } else if (data.type === 'clear') {
+          textDisplay.innerHTML = '';
+          textDisplay.appendChild(cursor);
+        }
+      };
+      
+      ws.onclose = () => {
+        console.log('Disconnected from server');
+        statusDiv.className = 'disconnected';
+        statusText.textContent = '○ Disconnected - Reconnecting...';
+        
+        reconnectInterval = setInterval(() => {
+          connect();
+        }, 2000);
+      };
+      
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+    }
+    
+    function clearText() {
+      fetch('/clear', { method: 'POST' })
+        .catch(err => console.error('Clear failed:', err));
+    }
+    
+    function toggleTheme() {
+      currentTheme = (currentTheme + 1) % themes.length;
+      const theme = themes[currentTheme];
+      document.body.style.background = theme.bg;
+      document.body.style.color = theme.fg;
+      cursor.style.background = theme.fg;
+      statusText.textContent = `● ${theme.name} Theme`;
+      
+      setTimeout(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          statusText.textContent = '● Connected';
+        }
+      }, 1000);
+    }
+    
+    connect();
+    
+    let wakeLock = null;
+    if ('wakeLock' in navigator) {
+      navigator.wakeLock.request('screen').then(lock => {
+        wakeLock = lock;
+      }).catch(err => {
+        console.log('Wake lock failed:', err);
+      });
+    }
+  </script>
+</body>
+</html>
